@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 import string
-from wordcloud import WordCloud, STOPWORDS
+from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 import sys
 import nltk
@@ -349,7 +349,7 @@ def generateWordClouds(wordFrequencies, imageMask, generateCustomWordCloud = Fal
 		WordCloud(
 			width = 2000, 
 			height = 2000,
-			background_color =(173, 105, 209),
+			background_color = (173, 105, 209),
 			min_font_size = 10, 
 			mask=imageMask, 
 			max_words = 50000,
