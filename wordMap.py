@@ -11,7 +11,7 @@ from nltk.corpus import stopwords
 from PIL import Image
 import numpy as np
 import random
-
+from datetime import datetime
 
 letterTypes = ["letters", "digits", "punctuation", "all"]
 
@@ -47,6 +47,8 @@ customColorPalettes = {
 	}
 }
 
+outputDir = "output"
+
 currentPaletteName = ""
 
 ## TODOs:
@@ -66,10 +68,11 @@ currentPaletteName = ""
 # maybe add called back in from list of stopwordds (remove from list)
 # turn into class, so state var can be retained (above color variables especially would be helpful)
 # possibly change font
+# TODO try except finally - use in JSON file export too! (maybe maybe a function since we do it 2 times?)
 
 def generatePathOfFolderOrFile(folderOrFile):
+	dynamicPath = getDynamicCWD()
 	currentWorkingDirectory = os.getcwd()
-	dynamicPath = Path(currentWorkingDirectory)
 	# print(currentWorkingDirectory, dynamicPath)
 
 	for objectName in os.listdir(currentWorkingDirectory):
@@ -198,29 +201,93 @@ def sortFrequencyCount(orderLowestToHighest, frequencyCountDict):
 	return {k: v for k, v in sorted(frequencyCountDict.items(), 
 	key=lambda item: item[1], reverse=(orderLowestToHighest != True))}
 
-def exportDataToFile(dataDict, outputFileName):
-	with open(outputFileName, 'w') as outputFile:
-		outputFile.write(json.dumps(dataDict))
+def exportDataToFile(dataDict, outputFileName, currentEpochTime):
+	with open(generateOutputFileName(currentEpochTime, outputFileName), 'w') as outputFile:
+		outputFile.write(json.dumps(dataDict, indent=4))
 
-	print("\nFind your full, processed word frequency usage in the JSON file " + outputFileName + ".")
+	print("\nFind a JSON copy of your full, processed word frequency usage in the JSON file " + outputFileName + ".")
 
-def generateWordClouds(wordFrequencies, imageMask, generateCustomWordCloud = False, customPreferences = None, imageOutputFormat=".png"):
+def generateWordClouds(wordFrequencies, imageMask, currentEpochTime, generateCustomWordCloud = False, customPreferences = None, imageOutputFormat=".png"
+	, counterStart = 1):
 	# TODO: based on a few types specified (arguments), generate different types of word clouds
 	# TODO: consider adding max_words arugments? Not sure if it's needed.
 
-	if generateCustomWordCloud != False:
+	wordCloudBases = []
+
+	if generateCustomWordCloud:
 		if (customPreferences is None):
 			print("Specify custom preferences if you want to generate a custom word cloud.")
+			return
 		else:
-			# implement here
-			pass
+			for customPreference in customPreferences:
+				if "includeMaxNumberWordsPossible" in customPreference:
+					max_words = len(wordFrequencies) + 1
+				else:
+					# TODO: change to dynamic parameters, so max_words_default is not hardcoded
+
+					# default max words as specified in WordCloud documentation
+					max_words = 200
+
+				# TODO dynamically pass in fxn. arguments instead of hardcoding (and account for them not being there)
+				# TODO why is the 1st image not generating?
+				print("Appending wordCloud...", customPreference)
+				print(customPreference["fontColor"], type(customPreference["fontColor"]))
+
+				if "fontColor" in customPreference:
+					fontColor = customPreference["fontColor"]
+				else:
+					fontColor = None
+
+				# TODO FIX LAMBDA FUNCTION NOT REMEMBERING ARGUMENT!!!!!!!!!!!!!!!!!!!!!!!!!
+				# wordCloudBases.append(
+				# WordCloud(
+				# 	width = 2000, 
+				# 	height = 2000, 
+				# 	max_words = max_words,
+				# 	background_color = customPreference["backgroundColor"], 
+				# 	color_func=(lambda copy=fontColor, **args, **kwargs: copy),
+				# 	min_font_size = 12)
+				# )
+
+			wordCloudBases.append(
+			WordCloud(
+				width = 2000, 
+				height = 2000, 
+				max_words = max_words,
+				background_color = (0, 0, 0), 
+				color_func=lambda *args, **kwargs: (255, 255, 255),
+				min_font_size = 12)
+			)
+
+			wordCloudBases.append(
+			WordCloud(
+				width = 2000, 
+				height = 2000, 
+				max_words = max_words,
+				background_color = (255, 255, 255), 
+				color_func=lambda *args, **kwargs: (0, 0, 0),
+				min_font_size = 12)
+			)
+
+			wordCloudBases.append(
+			WordCloud(
+				width = 2000, 
+				height = 2000,
+				background_color ='black',
+				min_font_size = 10, 
+				# contour_width = 0.5,
+				mask=imageMask, 
+				max_words = 50000,
+				color_func=lambda *args, **kwargs: (255,0,0))
+			)
+
+
 
 	# some examples of the different kind of varieties of word clouds possible below
 	# shows the number of possibilities and creativity possible
 
 	else:
 		print("Setting up word cloud structures.")
-		wordCloudBases = []
 
 		# version 1: maskless, min font size = 12, bg color = yellow, black font colours
 		# max_words = 50000 (as many as will fit in the wordmap - comprehensive)
@@ -403,12 +470,14 @@ def generateWordClouds(wordFrequencies, imageMask, generateCustomWordCloud = Fal
 		#TODO
 		# version 15: change font...
 
-	counter = 1
+	counter = counterStart
+	print(counter, wordCloudBases)
+	# TODO fix generating word cloud statement for optional counterStart
 	numWordClouds = len(wordCloudBases)
-	for wordCloudBases in wordCloudBases:
+	for wordCloudBase in wordCloudBases:
 		print("Generating word cloud " + str(counter) + " of " + str(numWordClouds) + ".")
-		wordCloud = wordCloudBases.fit_words(wordFrequencies)
-		plotWordCloud(wordCloud, "wordCloudV" + str(counter) + imageOutputFormat)
+		wordCloud = wordCloudBase.fit_words(wordFrequencies)
+		plotWordCloud(wordCloud, "wordCloudV" + str(counter) + imageOutputFormat, currentEpochTime)
 		counter+=1
 
 def makeColorPalette(paletteName):
@@ -441,14 +510,16 @@ def generateRandColorFromPalette():
 	# print(R, G, B)
 	return (R, G, B)
 
-def plotWordCloud(wordCloud, fileName):
+def plotWordCloud(wordCloud, fileName, currentEpochTime):
 	# plot the WordCloud image					
 	plt.figure(figsize = (25, 25), facecolor = None)
 	plt.imshow(wordCloud) #, interpolation="bilinear")
 	plt.axis("off")
 	plt.tight_layout(pad = 0)
-	plt.savefig(fileName)
+	plt.savefig(generateOutputFileName(currentEpochTime, fileName))
 
+def getCurrentDateTime():
+	return str(datetime.now().timestamp())
 
 def addCustomStopwords(stopwordsList):
 	# add custom stopwords here
@@ -496,11 +567,54 @@ def formatTopMostUsedWords(topXMostUsedWords):
 
 	return output
 
+def writeBeautifiedDataToFile(numUniqueWords, sortedWordFrequencyCounter, file):
+	counter = 1
+	file.write("The number of unique words you have used in this conversation are: " + str(numUniqueWords) + ".\n")
+	file.write("This is a list of the most used words in this conversation in increasing order.\n")
+	file.write("Each line below reads in this format: \"Word was used # times in this conversation.\" For example:\n")
+	file.write("Python: 999\nreads as \"Python was used 999 times in this conversation\".\n\n")
+
+	for key in sortedWordFrequencyCounter:
+		file.write(str(counter) + ". " + key + ": " + str(int(sortedWordFrequencyCounter[key])) + "\n")
+		counter+=1
+
+def beautifyAndExportDataToFile(sortedWordFrequencyCounter, fileName, numUniqueWords, currentEpochTime):
+	try:
+		with open(generateOutputFileName(currentEpochTime, fileName), "x") as file:
+			print("Test")
+			writeBeautifiedDataToFile(numUniqueWords, sortedWordFrequencyCounter, file)
+
+	except FileExistsError:
+		print("\n" + fileName + " already exists; appending to the end of this pre-existing file.")
+		with open(fileName, "a") as file:	
+			writeBeautifiedDataToFile(numUniqueWords, sortedWordFrequencyCounter, file)
+
+	except Exception as error:
+		# print(error)
+		print("Human readable file of word frequency usage file unable to be generated, please make sure the directory does not contain "
+		+ fileName + " and try again.")
+		return
+
+	print("\nFind a human readable copy of your full, processed word frequency usage in the text file " + fileName + ".\n")
+
+def getDynamicCWD():
+	currentWorkingDirectory = os.getcwd()
+	return Path(currentWorkingDirectory)
+
+def generateOutputFileName(currentEpochTime, fileName):
+	dynamicPath = getDynamicCWD()
+	newFilePath = dynamicPath / outputDir / currentEpochTime / fileName
+	return newFilePath
+
 def main():
+	# stopwords
 	stopwordsSet = initStopwords()
 
-	# validate stopwords
-	# print(stopwordsSet)
+	# create time base dir for storage
+	currentEpochTime = getCurrentDateTime()
+	dynamicPath = getDynamicCWD()
+	newDir = dynamicPath / outputDir / currentEpochTime
+	os.mkdir(newDir)
 
 	print("\n")
 	folderPath = generatePathOfFolderOrFile("JSONCollection")
@@ -517,14 +631,30 @@ def main():
 
 	# TODO: evaluate - is sorting a dictionary even worth it? Maybe not? More efficient ways?
 	sortedWordFrequencyCounter = sortFrequencyCount(wordFrequencyCounter, wordFrequencyCounter)
-
-	exportDataToFile(sortedWordFrequencyCounter, "output.json")
-
 	conversationStats = generateStatistics(sortedWordFrequencyCounter)
+
+	exportDataToFile(sortedWordFrequencyCounter, "wordUsageJSON.json", currentEpochTime)
+	beautifyAndExportDataToFile(sortedWordFrequencyCounter, "wordUsageHumanReadable.txt", conversationStats["numUniqueWords"], currentEpochTime)
+
+	# TODO allow user input for custom preferences
+	customPreferences = [
+		{"backgroundColor": "white", 
+		"fontColor": "black", 
+		"includeMaxNumberWordsPossible": True
+		},
+		{"backgroundColor": "black", 
+		"fontColor": "white",
+		"includeMaxNumberWordsPossible": True
+		}
+	]
+	generateWordClouds(sortedWordFrequencyCounter, imageArr, currentEpochTime, generateCustomWordCloud = True, customPreferences = customPreferences, 
+	counterStart=17)
+
 	print("The number of unique words you have used in this conversation are:", conversationStats["numUniqueWords"])
 	print("The top 3 most used words in this conversation are:\n" + formatTopMostUsedWords(conversationStats["top3MostUsedWords"]))
 
-	generateWordClouds(sortedWordFrequencyCounter, imageArr)
+	# full word cloud generation, no customs
+	# generateWordClouds(sortedWordFrequencyCounter, imageArr)
 	print("\nTa-da! The wordclouds are ready. Look in the directory for \"wordCloudsV#.png\" files.")
 
 if __name__ == '__main__':
